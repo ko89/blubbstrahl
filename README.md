@@ -3,7 +3,11 @@
 This script can download photos from a twitter stream.
 
 # Installation
-You will need to have the Python Twitter Tools installed. I also didn't test with Python versions below 3.4 yet.
+You will need to have the `tweepy` library installed. Then just do:
+
+    git clone https://github.com/ko89/blubbstrahl.git
+    cd blubbstrahl
+
 
 # How to use it?
 First you need to create a file named `config.ini`.
@@ -13,7 +17,8 @@ and enter them in the config.
 The `access_token` field can be left as it is. This will be used by the script for storing a received access token (sometime in the future).
 
 After editing the config you can start downloading the photos of a specific user like this:
-`python blubbstrahl.py -u username`
+
+    python blubbstrahl.py -u username
 
 # Limitations
 For now the script will only get the 100 newest tweets and download all attached images, if there are any. This includes retweets.

@@ -1,5 +1,5 @@
 import configparser, json, os, urllib.request, argparse
-from twitter import *
+import tweepy
 
 class Blubbstrahl:
     def __init__(self):
@@ -75,20 +75,24 @@ class Blubbstrahl:
             self.client = AppClient(self.consumer_key,
                 self.consumer_secret, self.access_token)
         """
-        #auth=OAuth(self.oauth_token, self.oauth_secret,
-        #            self.consumer_key, self.consumer_secret)
-        #self.client = Twitter(auth)
-        self.client = Twitter(auth=OAuth(self.oauth_token, self.oauth_secret,
-                    self.consumer_key, self.consumer_secret))
+        auth = tweepy.OAuthHandler(self.consumer_key, self.consumer_secret)
+        auth.set_access_token(self.oauth_token, self.oauth_secret)
+
+        self.client = tweepy.API(
+            auth,
+            wait_on_rate_limit=True,
+            wait_on_rate_limit_notify=True)
+        #self.client = Twitter(auth=OAuth(self.oauth_token, self.oauth_secret,
+        #            self.consumer_key, self.consumer_secret), retry=True)
 
         return self.client
 
     def find_photos(self, data, entity_key, url_set):
         # Check if tweet contains any entities
-        if entity_key in data:
+        if entity_key in data._json:
             # Check if tweet contains media in entities
-            if 'media' in data[entity_key]:
-                for m in data[entity_key]['media']:
+            if 'media' in data._json[entity_key]:
+                for m in data._json[entity_key]['media']:
                     # We only want original size photos
                     if m['type'] == 'photo':
                         img_url = "{0}:{1}".format(m['media_url'],"orig")
@@ -103,19 +107,22 @@ class Blubbstrahl:
         #response = blubbstrahl.client.api.statuses.user_timeline.get(
         #    screen_name=twitter_handle)
 
-        response = self.client.statuses.user_timeline(
-            screen_name=twitter_handle,
-            count=100)
+        #response = self.client.user_timeline(
+        #    screen_name=twitter_handle,
+        #    count=100)
+
         #with open('output_all.json','w+') as f:
         #    json.dump(response, f)
         #print(response.data[0]['extended_entities'])
         all_urls = set()
         # Search for photos in all received tweets
-        for data in response:
+        for data in tweepy.Cursor(
+            self.client.user_timeline,
+            id=twitter_handle).items(500):
+        #for data in response:
             #print(data.id)
             #with open('output.json','w+') as f:
             #    json.dump(data, f)
-
             self.find_photos(data, 'entities', all_urls)
 
             self.find_photos(data, 'extended_entities', all_urls)
