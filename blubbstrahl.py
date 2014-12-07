@@ -4,6 +4,7 @@ import urllib.request
 import argparse
 import tweepy
 import pickle
+import pexif
 
 
 class Blubbstrahl:
@@ -49,14 +50,25 @@ class Blubbstrahl:
             exit()
 
         self.consumer_key = config['login']['consumer_key']
-        print("Read consumer key: {0}".format(self.consumer_key))
         self.consumer_secret = config['login']['consumer_secret']
-        print("Read consumer secret: {0}".format(self.consumer_secret))
         self.access_token = config['login']['access_token']
-        print("Read access token: {0}".format(self.access_token))
         self.oauth_token = config['login']['oauth_token']
         self.oauth_secret = config['login']['oauth_secret']
         self.download_path = config['general']['download_path']
+
+    def write_config(self, config_file):
+        config = configparser.RawConfigParser()
+
+        config['login'] = {'consumer_key': self.consumer_key,
+                           'consumer_secret': self.consumer_secret,
+                           'oauth_token': self.oauth_token,
+                           'oauth_secret': self.oauth_secret,
+                           'access_token': self.access_token}
+
+        config['general'] = {'download_path': self.download_path}
+
+        with open(config_file, 'w+') as configfile:
+            config.write(configfile)
 
     def read_pickle(self, picklefile):
         """Read the dictionary of last read tweets from file"""
@@ -75,19 +87,8 @@ class Blubbstrahl:
         with open(picklefile, 'wb') as f:
             pickle.dump(self.last_tweets, f)
 
-    def write_config(self, config_file):
-        config = configparser.RawConfigParser()
-
-        config['login'] = {'consumer_key': self.consumer_key,
-                           'consumer_secret': self.consumer_secret,
-                           'oauth_token': self.oauth_token,
-                           'oauth_secret': self.oauth_secret,
-                           'access_token': self.access_token}
-
-        config['general'] = {'download_path': self.download_path}
-
-        with open(config_file, 'w+') as configfile:
-            config.write(configfile)
+    def write_exif(self, tweet_url, tweet_text):
+        """Write the tweet url and text to exif of the image file."""
 
     def create_client(self):
         """Create a new twitter client instance."""
@@ -120,7 +121,7 @@ class Blubbstrahl:
         """Retrieve a set of photo-urls by the user."""
 
         # Use a set to prevent duplicate entries
-        all_urls = set()
+
         s_id = 0
 
         cursor = tweepy.Cursor(self.client.user_timeline,
@@ -136,20 +137,29 @@ class Blubbstrahl:
 
         # Search for photos in all received tweets
         for data in cursor.items(maxitems):
-
+            print(data)
+            all_urls = set()
             # Photo urls can be in two sections of the
             # returned json.
 
             self.find_photos(data, 'entities', all_urls)
 
             self.find_photos(data, 'extended_entities', all_urls)
+
+            # download photos and set exif data
+            if all_urls is not None:
+                for img_url in all_urls:
+                    path = os.path.join(blubbstrahl.download_path,
+                                        twitter_handle)
+                    filename = self.download_file(img_url, path)
+
+                    self.write_exif(filename, data.url)
+
             if twitter_handle in self.last_tweets:
                 if data.id > self.last_tweets[twitter_handle]:
                     self.last_tweets[twitter_handle] = data.id
             else:
                 self.last_tweets[twitter_handle] = data.id
-
-        return all_urls
 
     def download_file(self, url, path):
         """Download a photo from twitter."""
@@ -162,6 +172,8 @@ class Blubbstrahl:
         with open(file_name, "wb") as local_file:
             f = urllib.request.urlopen(url)
             local_file.write(f.read())
+
+        return file_name
 
     def download_photos(self, twitter_handle, items, use_last_tweets):
         """Search and download the specified number of photos of the user."""
@@ -200,7 +212,9 @@ if __name__ == "__main__":
     if use_last_tweets is True and len(blubbstrahl.last_tweets) > 0:
         print("Continuing from last read tweet if possible.")
 
-    blubbstrahl.download_photos(twitter_handle, maxitems, use_last_tweets)
+    blubbstrahl.get_photoset(twitter_handle, maxitems, use_last_tweets)
+
+    print("No more tweets. Goodbye.")
 
     blubbstrahl.write_config("config.ini")
     blubbstrahl.write_pickle("last_tweets.pickle")
